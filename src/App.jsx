@@ -102,7 +102,7 @@ print(total)`
 
     try {
       const response = await fetch(
-        'http://127.0.0.1:5000/api/explain',
+        'https://codelens-4640.onrender.com/api/explain',
         {
           method: 'POST',
           headers: {
