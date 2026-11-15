@@ -55,7 +55,6 @@ print(total)`
   const [historySearch, setHistorySearch] = useState('');
   const [savedSearch, setSavedSearch] = useState('');
 
-  // Dashboard language breakdown visibility
   const [showLanguageBreakdown, setShowLanguageBreakdown] = useState(false);
 
   // Persist preferences
@@ -273,6 +272,15 @@ print(total)`
     setLanguage(newLanguage);
   };
 
+  // Mobile navigation items
+  const mobileNavItems = [
+    { page: 'Dashboard', icon: '⌂', label: 'Home' },
+    { page: 'Code Explainer', icon: '⌨', label: 'Editor' },
+    { page: 'History', icon: '◷', label: 'History' },
+    { page: 'Saved Code', icon: '☆', label: 'Saved' },
+    { page: 'Settings', icon: '⚙', label: 'Settings' },
+  ];
+
   return (
     <div className={`app ${theme === 'light' ? 'light-theme' : ''}`}>
 
@@ -316,16 +324,29 @@ print(total)`
           >
             ⚙ Settings
           </div>
-
-          <div className="profile">
-            <div className="avatar">Y</div>
-            <div>
-              <strong>Developer</strong>
-              <small>Free Account</small>
-            </div>
-          </div>
         </div>
       </aside>
+
+      {/* MOBILE BOTTOM NAVIGATION */}
+      <nav className="mobile-nav" aria-label="Mobile navigation">
+        {mobileNavItems.map((item) => (
+          <button
+            key={item.page}
+            type="button"
+            className={
+              activePage === item.page
+                ? 'mobile-nav-item active'
+                : 'mobile-nav-item'
+            }
+            onClick={() => setActivePage(item.page)}
+            aria-label={item.label}
+            aria-current={activePage === item.page ? 'page' : undefined}
+          >
+            <span>{item.icon}</span>
+            <small>{item.label}</small>
+          </button>
+        ))}
+      </nav>
 
       <main className="main">
 
