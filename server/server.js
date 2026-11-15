@@ -19,7 +19,7 @@ dotenv.config({
 
 const app = express();
 
-const PORT = 5000;
+const PORT = Number(process.env.PORT) || 5000;
 const MODEL = "gemini-3.1-flash-lite";
 
 const REQUEST_TIMEOUT_MS = 30000;
@@ -286,10 +286,10 @@ ${code}
 // START SERVER
 // =========================================
 
-const server = app.listen(PORT, "127.0.0.1", () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
     console.log("--------------------------------");
     console.log("CodeLens Backend is Running!");
-    console.log(`URL: http://127.0.0.1:${PORT}`);
+    console.log(`Listening on port ${PORT}`);
     console.log(`API Key Loaded: ${Boolean(apiKey)}`);
     console.log(`Gemini Model: ${MODEL}`);
     console.log(`Request Timeout: ${REQUEST_TIMEOUT_MS / 1000} seconds`);
