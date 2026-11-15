@@ -281,11 +281,24 @@ print(total)`
     { page: 'Settings', icon: '⚙', label: 'Settings' },
   ];
 
+  // Return to Dashboard from CodeLens branding
+  const goToDashboard = () => {
+    setActivePage('Dashboard');
+    setShowLanguageBreakdown(false);
+  };
+
   return (
     <div className={`app ${theme === 'light' ? 'light-theme' : ''}`}>
 
       <aside className="sidebar">
-        <h2 className="logo">Code<span>Lens.</span></h2>
+        <button
+          type="button"
+          className="logo"
+          onClick={goToDashboard}
+          aria-label="Go to CodeLens Dashboard"
+        >
+          Code<span>Lens.</span>
+        </button>
 
         <p className="nav-heading">WORKSPACE</p>
 
@@ -350,31 +363,49 @@ print(total)`
 
       <main className="main">
 
+        {/* TOP HEADER */}
         <header className="topbar">
-          <div>
-            <h2>
-              {activePage === 'Settings'
-                ? 'Settings'
-                : activePage === 'Dashboard'
-                ? 'Dashboard'
-                : activePage === 'History'
-                ? 'Analysis History'
-                : activePage === 'Saved Code'
-                ? 'Saved Code'
-                : 'Code Workspace'}
-            </h2>
+          <div className="topbar-brand">
 
-            <p>
-              {activePage === 'Settings'
-                ? 'Customize your CodeLens experience.'
-                : activePage === 'Dashboard'
-                ? 'Your coding activity at a glance.'
-                : activePage === 'History'
-                ? 'Review your previous code analyses.'
-                : activePage === 'Saved Code'
-                ? 'Access your saved code snippets.'
-                : 'Understand code. Learn smarter.'}
-            </p>
+            {/* MOBILE CODELENS BRANDING */}
+            <button
+              type="button"
+              className="mobile-brand"
+              onClick={goToDashboard}
+              aria-label="Go to CodeLens Dashboard"
+            >
+              <span className="mobile-brand-icon">⌘</span>
+              <span className="mobile-brand-name">
+                Code<span>Lens.</span>
+              </span>
+            </button>
+
+            {/* PAGE HEADING */}
+            <div className="page-heading">
+              <h2>
+                {activePage === 'Settings'
+                  ? 'Settings'
+                  : activePage === 'Dashboard'
+                  ? 'Dashboard'
+                  : activePage === 'History'
+                  ? 'Analysis History'
+                  : activePage === 'Saved Code'
+                  ? 'Saved Code'
+                  : 'Code Workspace'}
+              </h2>
+
+              <p>
+                {activePage === 'Settings'
+                  ? 'Customize your CodeLens experience.'
+                  : activePage === 'Dashboard'
+                  ? 'Your coding activity at a glance.'
+                  : activePage === 'History'
+                  ? 'Review your previous code analyses.'
+                  : activePage === 'Saved Code'
+                  ? 'Access your saved code snippets.'
+                  : 'Understand code. Learn smarter.'}
+              </p>
+            </div>
           </div>
 
           <div className="status">
