@@ -97,9 +97,26 @@ print(total)`
     }
 
     setLoading(true);
-    setMessage('CodeLens AI is analyzing your code...');
+    setMessage('Connecting to CodeLens AI...');
+
+    let slowRequestTimer;
+    let longRequestTimer;
 
     try {
+      // Show a message if the request takes longer than usual
+      slowRequestTimer = setTimeout(() => {
+        setMessage(
+          'This is taking longer than usual. The server may be starting after inactivity. Please keep this page open...'
+        );
+      }, 8000);
+
+      // Show another update if the request is still pending
+      longRequestTimer = setTimeout(() => {
+        setMessage(
+          'The CodeLens server is still starting or processing your request. This can take 50 seconds or more after inactivity. Please wait...'
+        );
+      }, 20000);
+
       const response = await fetch(
         'https://codelens-4640.onrender.com/api/explain',
         {
@@ -121,6 +138,12 @@ print(total)`
         throw new Error(data.error || 'Unable to analyze code.');
       }
 
+      if (!data.explanation) {
+        throw new Error(
+          'The AI returned an empty response. Please try again.'
+        );
+      }
+
       setMessage(data.explanation);
 
       const newHistoryItem = {
@@ -136,11 +159,15 @@ print(total)`
 
     } catch (error) {
       console.error('Analysis Error:', error);
+
       setMessage(
         error.message ||
-        'Unable to connect to CodeLens AI. Please check your backend.'
+        'Unable to connect to CodeLens AI. Please try again.'
       );
+
     } finally {
+      clearTimeout(slowRequestTimer);
+      clearTimeout(longRequestTimer);
       setLoading(false);
     }
   };
