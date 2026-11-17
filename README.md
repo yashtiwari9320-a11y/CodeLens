@@ -15,15 +15,19 @@ CodeLens is an AI-powered web application designed to help developers understand
 ## Screenshots
 
 ### Dashboard
+
 ![CodeLens Dashboard](screenshots/dashboard.png)
 
 ### Code Explainer
+
 ![CodeLens Code Explainer](screenshots/code-explainer.png)
 
 ### Analysis History
+
 ![CodeLens History](screenshots/history.png)
 
 ### Saved Code
+
 ![CodeLens Saved Code](screenshots/saved-code.png)
 
 ---
@@ -101,21 +105,25 @@ cd server
 npm install
 ```
 
-Create a `.env` file in the server directory and configure your Gemini API key using the environment variable name expected by your backend source code.
+Create a `.env` file inside the `server` directory and configure your Gemini API key using the environment variable name expected by your backend source code.
 
 **Security Note:** Never upload API keys or private environment files to GitHub.
 
 ### 5. Run the Application
 
-Start the backend using its configured start command from the `server` directory.
+Start the backend from the `server` directory:
 
-Start the frontend in a separate terminal:
+```bash
+npm start
+```
+
+Start the frontend in a separate terminal from the project root:
 
 ```bash
 npm run dev
 ```
 
-The frontend and backend should run separately using their respective development commands.
+The frontend and backend run separately.
 
 ## Project Structure
 
