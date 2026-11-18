@@ -4,6 +4,47 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import './App.css';
 
+const API_BASE_URL = import.meta.env.DEV
+  ? 'http://localhost:5000'
+  : 'https://codelens-4640.onrender.com';
+
+const getStoredArray = (key) => {
+  try {
+    return JSON.parse(localStorage.getItem(key)) || [];
+  } catch {
+    return [];
+  }
+};
+
+const formatDate = (date) => {
+  if (!date) return new Date().toLocaleString();
+
+  const parsedDate = new Date(date);
+
+  return Number.isNaN(parsedDate.getTime())
+    ? date
+    : parsedDate.toLocaleString();
+};
+
+const normalizeHistory = (item) => ({
+  id: String(item._id || item.id || Date.now()),
+  language: item.language,
+  task: item.task,
+  code: item.code,
+  explanation: item.explanation,
+  date: formatDate(item.createdAt || item.date),
+});
+
+const normalizeSavedCode = (item) => ({
+  id: String(item._id || item.id || Date.now()),
+  title: item.title,
+  language: item.language,
+  code: item.code,
+  task: item.task || 'Explain',
+  explanation: item.explanation || '',
+  date: formatDate(item.createdAt || item.date),
+});
+
 function App() {
   const [language, setLanguage] = useState(() =>
     localStorage.getItem('codelens-default-language') || 'Python'
@@ -35,29 +76,145 @@ print(total)`
   const [activeTab, setActiveTab] = useState('Explain');
   const [loading, setLoading] = useState(false);
 
-  const [history, setHistory] = useState(() => {
+  const [history, setHistory] = useState(() =>
+    getStoredArray('codelens-history')
+  );
+
+  const [savedCode, setSavedCode] = useState(() =>
+    getStoredArray('codelens-saved-code')
+  );
+
+  // Authentication state
+  const [token, setToken] = useState(() =>
+    localStorage.getItem('codelens-token') || ''
+  );
+
+  const [user, setUser] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('codelens-history')) || [];
+      return JSON.parse(localStorage.getItem('codelens-user')) || null;
     } catch {
-      return [];
+      return null;
     }
   });
 
-  const [savedCode, setSavedCode] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('codelens-saved-code')) || [];
-    } catch {
-      return [];
-    }
-  });
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState('login');
+  const [authName, setAuthName] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
+  const [dataLoading, setDataLoading] = useState(false);
+
+  const isAuthenticated = Boolean(token && user);
 
   const [activePage, setActivePage] = useState('Dashboard');
   const [historySearch, setHistorySearch] = useState('');
   const [savedSearch, setSavedSearch] = useState('');
-
   const [showLanguageBreakdown, setShowLanguageBreakdown] = useState(false);
 
-  // Persist preferences
+  // API helper for authenticated requests.
+  const authenticatedRequest = async (endpoint, options = {}, authToken = token) => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+        ...(options.headers || {}),
+      },
+    });
+
+    let data = {};
+
+    try {
+      data = await response.json();
+    } catch {
+      data = {};
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        data.message || data.error || 'The request could not be completed.'
+      );
+    }
+
+    return data;
+  };
+
+  // Load the logged-in user's cloud data.
+  const loadCloudData = async (authToken) => {
+    setDataLoading(true);
+
+    try {
+      const [historyData, savedData] = await Promise.all([
+        authenticatedRequest('/api/user-data/history', {}, authToken),
+        authenticatedRequest('/api/user-data/saved-code', {}, authToken),
+      ]);
+
+      const cloudHistory = Array.isArray(historyData.history)
+        ? historyData.history
+        : [];
+
+      const cloudSavedCode = Array.isArray(savedData.savedCode)
+        ? savedData.savedCode
+        : [];
+
+      setHistory(cloudHistory.map(normalizeHistory));
+      setSavedCode(cloudSavedCode.map(normalizeSavedCode));
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
+  // Restore a previously logged-in session.
+  useEffect(() => {
+    if (!token || !user) return;
+
+    let cancelled = false;
+
+    const restoreSession = async () => {
+      try {
+        const [historyData, savedData] = await Promise.all([
+          authenticatedRequest('/api/user-data/history', {}, token),
+          authenticatedRequest('/api/user-data/saved-code', {}, token),
+        ]);
+
+        if (cancelled) return;
+
+        setHistory(
+          (Array.isArray(historyData.history) ? historyData.history : [])
+            .map(normalizeHistory)
+        );
+
+        setSavedCode(
+          (Array.isArray(savedData.savedCode) ? savedData.savedCode : [])
+            .map(normalizeSavedCode)
+        );
+      } catch (error) {
+        if (cancelled) return;
+
+        console.error('Session restoration error:', error);
+
+        localStorage.removeItem('codelens-token');
+        localStorage.removeItem('codelens-user');
+
+        setToken('');
+        setUser(null);
+        setHistory(getStoredArray('codelens-history'));
+        setSavedCode(getStoredArray('codelens-saved-code'));
+      }
+    };
+
+    restoreSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Persist preferences.
   useEffect(() => {
     localStorage.setItem('codelens-default-language', defaultLanguage);
   }, [defaultLanguage]);
@@ -66,17 +223,20 @@ print(total)`
     localStorage.setItem('codelens-theme', theme);
   }, [theme]);
 
-  // Persist History
+  // Only guests write History and Saved Code to browser storage.
   useEffect(() => {
-    localStorage.setItem('codelens-history', JSON.stringify(history));
-  }, [history]);
+    if (!isAuthenticated) {
+      localStorage.setItem('codelens-history', JSON.stringify(history));
+    }
+  }, [history, isAuthenticated]);
 
-  // Persist Saved Code
   useEffect(() => {
-    localStorage.setItem('codelens-saved-code', JSON.stringify(savedCode));
-  }, [savedCode]);
+    if (!isAuthenticated) {
+      localStorage.setItem('codelens-saved-code', JSON.stringify(savedCode));
+    }
+  }, [savedCode, isAuthenticated]);
 
-  // Dashboard language usage statistics
+  // Dashboard language usage statistics.
   const languageUsage = Object.entries(
     [...history, ...savedCode].reduce((usage, item) => {
       if (item.language) {
@@ -89,7 +249,115 @@ print(total)`
 
   const totalLanguages = languageUsage.length;
 
-  // Analyze code
+  // Register or log in.
+  const handleAuthSubmit = async (event) => {
+    event.preventDefault();
+
+    setAuthError('');
+    setAuthMessage('');
+
+    if (!authEmail.trim() || !authPassword) {
+      setAuthError('Please enter your email and password.');
+      return;
+    }
+
+    if (authMode === 'register' && !authName.trim()) {
+      setAuthError('Please enter your name.');
+      return;
+    }
+
+    if (authMode === 'register' && authPassword.length < 6) {
+      setAuthError('Password must contain at least 6 characters.');
+      return;
+    }
+
+    setAuthLoading(true);
+
+    try {
+      const endpoint = authMode === 'register'
+        ? '/api/auth/register'
+        : '/api/auth/login';
+
+      const body = authMode === 'register'
+        ? {
+            name: authName.trim(),
+            email: authEmail.trim(),
+            password: authPassword,
+          }
+        : {
+            email: authEmail.trim(),
+            password: authPassword,
+          };
+
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || data.error || 'Authentication failed.'
+        );
+      }
+
+      if (!data.token || !data.user) {
+        throw new Error('The server returned an invalid authentication response.');
+      }
+
+      localStorage.setItem('codelens-token', data.token);
+      localStorage.setItem('codelens-user', JSON.stringify(data.user));
+
+      setToken(data.token);
+      setUser(data.user);
+
+      setAuthPassword('');
+      setAuthName('');
+      setAuthEmail('');
+      setShowPassword(false);
+      setShowAuth(false);
+      setAuthError('');
+      setAuthMessage('');
+
+      try {
+        await loadCloudData(data.token);
+      } catch (syncError) {
+        console.error('Cloud data loading error:', syncError);
+        setMessage(
+          'You are logged in, but your cloud data could not be loaded. Please refresh and try again.'
+        );
+      }
+    } catch (error) {
+      console.error('Authentication Error:', error);
+      setAuthError(error.message || 'Unable to authenticate. Please try again.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Log out and restore the guest's browser data.
+  const handleLogout = () => {
+    localStorage.removeItem('codelens-token');
+    localStorage.removeItem('codelens-user');
+
+    setToken('');
+    setUser(null);
+
+    setHistory(getStoredArray('codelens-history'));
+    setSavedCode(getStoredArray('codelens-saved-code'));
+
+    setHistorySearch('');
+    setSavedSearch('');
+    setShowAuth(false);
+    setActivePage('Dashboard');
+    setMessage('You are now using CodeLens as a guest.');
+  };
+
+  // Analyze code.
   const handleAnalyze = async () => {
     if (!code.trim()) {
       setMessage('Please enter some code first.');
@@ -103,14 +371,12 @@ print(total)`
     let longRequestTimer;
 
     try {
-      // Show a message if the request takes longer than usual
       slowRequestTimer = setTimeout(() => {
         setMessage(
           'This is taking longer than usual. The server may be starting after inactivity. Please keep this page open...'
         );
       }, 8000);
 
-      // Show another update if the request is still pending
       longRequestTimer = setTimeout(() => {
         setMessage(
           'The CodeLens server is still starting or processing your request. This can take 50 seconds or more after inactivity. Please wait...'
@@ -147,7 +413,7 @@ print(total)`
       setMessage(data.explanation);
 
       const newHistoryItem = {
-        id: Date.now(),
+        id: String(Date.now()),
         language,
         task: activeTab,
         code,
@@ -155,8 +421,36 @@ print(total)`
         date: new Date().toLocaleString(),
       };
 
-      setHistory((previous) => [newHistoryItem, ...previous]);
+      if (isAuthenticated) {
+        try {
+          const savedData = await authenticatedRequest(
+            '/api/user-data/history',
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                language,
+                task: activeTab,
+                code,
+                explanation: data.explanation,
+              }),
+            }
+          );
 
+          const savedItem = savedData.history || savedData.item || savedData;
+
+          setHistory((previous) => [
+            normalizeHistory(savedItem),
+            ...previous,
+          ]);
+        } catch (syncError) {
+          console.error('History sync error:', syncError);
+          setMessage(
+            `${data.explanation}\n\n---\n**Note:** Your analysis succeeded, but it could not be saved to your account.`
+          );
+        }
+      } else {
+        setHistory((previous) => [newHistoryItem, ...previous]);
+      }
     } catch (error) {
       console.error('Analysis Error:', error);
 
@@ -164,7 +458,6 @@ print(total)`
         error.message ||
         'Unable to connect to CodeLens AI. Please try again.'
       );
-
     } finally {
       clearTimeout(slowRequestTimer);
       clearTimeout(longRequestTimer);
@@ -172,8 +465,8 @@ print(total)`
     }
   };
 
-  // Save current code
-  const handleSaveCode = () => {
+  // Save current code with its AI analysis.
+  const handleSaveCode = async () => {
     if (!code.trim()) {
       alert('Please enter some code before saving.');
       return;
@@ -189,56 +482,158 @@ print(total)`
     }
 
     const newSavedCode = {
-      id: Date.now(),
+      id: String(Date.now()),
       title: title.trim(),
       language,
       code,
+      task: activeTab,
+      explanation: message,
       date: new Date().toLocaleString(),
     };
 
-    setSavedCode((previous) => [newSavedCode, ...previous]);
-    alert('Code saved successfully!');
+    if (isAuthenticated) {
+      try {
+        const savedData = await authenticatedRequest(
+          '/api/user-data/saved-code',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              title: title.trim(),
+              language,
+              code,
+              task: activeTab,
+              explanation: message,
+            }),
+          }
+        );
+
+        const savedItem = savedData.savedCode || savedData.item;
+
+        if (!savedItem) {
+          throw new Error('Saved code response was invalid.');
+        }
+
+        setSavedCode((previous) => [
+          normalizeSavedCode(savedItem),
+          ...previous,
+        ]);
+
+        alert('Code and AI analysis saved successfully!');
+      } catch (error) {
+        console.error('Saved code sync error:', error);
+        alert(error.message || 'Unable to save code to your account.');
+      }
+    } else {
+      setSavedCode((previous) => [newSavedCode, ...previous]);
+      alert('Code and AI analysis saved successfully!');
+    }
   };
 
-  // Delete History entry
-  const deleteHistoryItem = (id) => {
+  // Delete History entry.
+  const deleteHistoryItem = async (id) => {
+    if (isAuthenticated) {
+      try {
+        await authenticatedRequest(
+          `/api/user-data/history/${id}`,
+          { method: 'DELETE' }
+        );
+      } catch (error) {
+        alert(error.message || 'Unable to delete this history entry.');
+        return;
+      }
+    }
+
     setHistory((previous) =>
-      previous.filter((item) => item.id !== id)
+      previous.filter((item) => String(item.id) !== String(id))
     );
   };
 
-  // Clear all History
-  const clearAllHistory = () => {
+  // Clear all History.
+  const clearAllHistory = async () => {
     if (history.length === 0) return;
 
     if (window.confirm('Delete all analysis history? This cannot be undone.')) {
+      if (isAuthenticated) {
+        try {
+          await authenticatedRequest(
+            '/api/user-data/history',
+            { method: 'DELETE' }
+          );
+        } catch (error) {
+          alert(error.message || 'Unable to clear account history.');
+          return;
+        }
+      }
+
       setHistory([]);
       setHistorySearch('');
     }
   };
 
-  // Delete saved code
-  const deleteSavedCode = (id) => {
+  // Delete saved code.
+  const deleteSavedCode = async (id) => {
+    if (isAuthenticated) {
+      try {
+        await authenticatedRequest(
+          `/api/user-data/saved-code/${id}`,
+          { method: 'DELETE' }
+        );
+      } catch (error) {
+        alert(error.message || 'Unable to delete this saved snippet.');
+        return;
+      }
+    }
+
     setSavedCode((previous) =>
-      previous.filter((item) => item.id !== id)
+      previous.filter((item) => String(item.id) !== String(id))
     );
   };
 
-  // Clear all Saved Code
-  const clearAllSavedCode = () => {
+  // Clear all Saved Code.
+  const clearAllSavedCode = async () => {
     if (savedCode.length === 0) return;
 
     if (window.confirm('Delete all saved code snippets? This cannot be undone.')) {
+      if (isAuthenticated) {
+        try {
+          await authenticatedRequest(
+            '/api/user-data/saved-code',
+            { method: 'DELETE' }
+          );
+        } catch (error) {
+          alert(error.message || 'Unable to clear saved code.');
+          return;
+        }
+      }
+
       setSavedCode([]);
       setSavedSearch('');
     }
   };
 
-  // Clear all app data
-  const clearAllData = () => {
+  // Clear all app data.
+  const clearAllData = async () => {
     if (window.confirm(
       'This will permanently delete all History and Saved Code. Continue?'
     )) {
+      if (isAuthenticated) {
+        try {
+          await Promise.all([
+            authenticatedRequest(
+              '/api/user-data/history',
+              { method: 'DELETE' }
+            ),
+            authenticatedRequest(
+              '/api/user-data/saved-code',
+              { method: 'DELETE' }
+            ),
+          ]);
+        } catch (error) {
+          alert(error.message || 'Unable to delete account data.');
+          return;
+        }
+      }
+
       setHistory([]);
       setSavedCode([]);
       setHistorySearch('');
@@ -247,7 +642,7 @@ print(total)`
     }
   };
 
-  // Search History
+  // Search History.
   const filteredHistory = history.filter((item) => {
     const searchText = historySearch.toLowerCase().trim();
 
@@ -261,7 +656,7 @@ print(total)`
     );
   });
 
-  // Search Saved Code
+  // Search Saved Code.
   const filteredSavedCode = savedCode.filter((item) => {
     const searchText = savedSearch.toLowerCase().trim();
 
@@ -271,20 +666,23 @@ print(total)`
       item.title?.toLowerCase().includes(searchText) ||
       item.language?.toLowerCase().includes(searchText) ||
       item.code?.toLowerCase().includes(searchText) ||
-      item.date?.toLowerCase().includes(searchText)
+      item.date?.toLowerCase().includes(searchText) ||
+      item.explanation?.toLowerCase().includes(searchText)
     );
   });
 
-  // Load saved code into editor
+  // Load saved code and its original AI analysis into the editor.
   const loadSavedCode = (item) => {
     setCode(item.code);
     setLanguage(item.language);
-    setMessage('Your saved code is ready to analyze.');
-    setActiveTab('Explain');
+    setMessage(
+      item.explanation || 'No saved AI analysis is available for this item.'
+    );
+    setActiveTab(item.task || 'Explain');
     setActivePage('Code Explainer');
   };
 
-  // View an analysis from History
+  // View an analysis from History.
   const viewHistoryItem = (item) => {
     setCode(item.code);
     setLanguage(item.language);
@@ -293,13 +691,13 @@ print(total)`
     setActivePage('Code Explainer');
   };
 
-  // Update default language
+  // Update default language.
   const updateDefaultLanguage = (newLanguage) => {
     setDefaultLanguage(newLanguage);
     setLanguage(newLanguage);
   };
 
-  // Mobile navigation items
+  // Mobile navigation items.
   const mobileNavItems = [
     { page: 'Dashboard', icon: '⌂', label: 'Home' },
     { page: 'Code Explainer', icon: '⌨', label: 'Editor' },
@@ -308,7 +706,6 @@ print(total)`
     { page: 'Settings', icon: '⚙', label: 'Settings' },
   ];
 
-  // Return to Dashboard from CodeLens branding
   const goToDashboard = () => {
     setActivePage('Dashboard');
     setShowLanguageBreakdown(false);
@@ -394,7 +791,6 @@ print(total)`
         <header className="topbar">
           <div className="topbar-brand">
 
-            {/* MOBILE CODELENS BRANDING */}
             <button
               type="button"
               className="mobile-brand"
@@ -407,7 +803,6 @@ print(total)`
               </span>
             </button>
 
-            {/* PAGE HEADING */}
             <div className="page-heading">
               <h2>
                 {activePage === 'Settings'
@@ -435,9 +830,72 @@ print(total)`
             </div>
           </div>
 
-          <div className="status">
-            <span className="status-dot"></span>
-            AI Workspace
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            flexWrap: 'wrap',
+          }}>
+            {isAuthenticated ? (
+              <>
+                <span
+                  title={user.email}
+                  style={{
+                    fontSize: '13px',
+                    color: 'var(--text-secondary, #aaa)',
+                    maxWidth: '150px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {user.name}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  style={{
+                    padding: '8px 13px',
+                    border: '1px solid var(--border-color, #333)',
+                    borderRadius: '7px',
+                    background: 'transparent',
+                    color: 'inherit',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                  }}
+                >
+                  Sign Out
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('login');
+                  setAuthError('');
+                  setAuthMessage('');
+                  setShowPassword(false);
+                  setShowAuth(true);
+                }}
+                style={{
+                  padding: '8px 14px',
+                  border: '1px solid var(--border-color, #444)',
+                  borderRadius: '7px',
+                  background: 'transparent',
+                  color: 'inherit',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                }}
+              >
+                Sign In
+              </button>
+            )}
+
+            <div className="status">
+              <span className="status-dot"></span>
+              AI Workspace
+            </div>
           </div>
         </header>
 
@@ -449,7 +907,11 @@ print(total)`
             <div className="dashboard-welcome">
               <div>
                 <p className="eyebrow">YOUR PERSONAL CODING ASSISTANT</p>
-                <h1>Welcome back, Developer.</h1>
+                <h1>
+                  {isAuthenticated
+                    ? `Welcome back, ${user.name}.`
+                    : 'Welcome, Developer.'}
+                </h1>
                 <p>
                   Keep learning, exploring and making sense of code.
                   Your coding workspace is ready.
@@ -466,7 +928,10 @@ print(total)`
               <div className="dashboard-welcome-icon">⌘</div>
             </div>
 
-            {/* Dashboard Statistics */}
+            {dataLoading && (
+              <p className="settings-muted">Loading your cloud data...</p>
+            )}
+
             <div className="dashboard-stats">
 
               <button
@@ -526,7 +991,6 @@ print(total)`
 
             </div>
 
-            {/* Language Breakdown */}
             {showLanguageBreakdown && (
               <div
                 className="panel dashboard-language-breakdown"
@@ -586,7 +1050,6 @@ print(total)`
               </div>
             )}
 
-            {/* Dashboard Content */}
             <div className="dashboard-content">
 
               <div className="panel dashboard-section">
@@ -703,7 +1166,6 @@ print(total)`
 
             </div>
 
-            {/* Quick Actions */}
             <div className="panel dashboard-quick-actions">
 
               <div className="panel-header">
@@ -753,6 +1215,44 @@ print(total)`
             </div>
 
             <div className="explanation-content">
+
+              <div className="settings-section">
+                <h3>Account</h3>
+                <p>
+                  {isAuthenticated
+                    ? 'Your History and Saved Code are synced with your account.'
+                    : 'You are currently using CodeLens as a guest. Your data is stored in this browser.'}
+                </p>
+
+                {isAuthenticated ? (
+                  <div className="about-details">
+                    <div>
+                      <span>Name</span>
+                      <strong>{user.name}</strong>
+                    </div>
+                    <div>
+                      <span>Email</span>
+                      <strong>{user.email}</strong>
+                    </div>
+                    <div>
+                      <span>Storage</span>
+                      <strong>MongoDB Cloud</strong>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    className="analyze-btn"
+                    onClick={() => {
+                      setAuthMode('register');
+                      setAuthError('');
+                      setShowPassword(false);
+                      setShowAuth(true);
+                    }}
+                  >
+                    Create an Account
+                  </button>
+                )}
+              </div>
 
               <div className="settings-section">
                 <h3>⌨ Editor Preferences</h3>
@@ -805,7 +1305,11 @@ print(total)`
 
               <div className="settings-section">
                 <h3>▤ Data Management</h3>
-                <p>Manage the data stored locally in this browser.</p>
+                <p>
+                  {isAuthenticated
+                    ? 'Manage the History and Saved Code stored in your account.'
+                    : 'Manage the data stored locally in this browser.'}
+                </p>
 
                 <div className="data-row">
                   <div>
@@ -865,7 +1369,9 @@ print(total)`
                   </div>
                   <div>
                     <span>Storage</span>
-                    <strong>Browser Local Storage</strong>
+                    <strong>
+                      {isAuthenticated ? 'MongoDB Cloud' : 'Browser Local Storage'}
+                    </strong>
                   </div>
                 </div>
               </div>
@@ -981,6 +1487,28 @@ print(total)`
                     </p>
 
                     <pre className="saved-code-preview">{item.code}</pre>
+
+                    {/* SAVED AI ANALYSIS */}
+                    <div className="saved-analysis">
+                      <strong>AI Analysis</strong>
+
+                      <p className="saved-analysis-type">
+                        Analysis type: {item.task || 'Explain'}
+                      </p>
+
+                      {item.explanation ? (
+                        <div className="explanation-content markdown-content">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {item.explanation}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p className="settings-muted">
+                          No AI analysis was stored with this snippet.
+                          Save a newly analyzed snippet to preserve its explanation.
+                        </p>
+                      )}
+                    </div>
 
                     <div className="entry-actions">
                       <button
@@ -1135,8 +1663,317 @@ print(total)`
         </footer>
 
       </main>
+
+      {/* AUTHENTICATION MODAL */}
+      {showAuth && (
+        <div
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setShowAuth(false);
+              setShowPassword(false);
+            }
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            background: 'rgba(0, 0, 0, 0.72)',
+            backdropFilter: 'blur(5px)',
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="auth-title"
+            style={{
+              width: '100%',
+              maxWidth: '420px',
+              padding: '30px',
+              borderRadius: '12px',
+              border: '1px solid var(--border-color, #333)',
+              background: 'var(--panel-bg, #15171d)',
+              color: 'var(--text-color, #f1f2f7)',
+              boxShadow: '0 20px 70px rgba(0,0,0,0.4)',
+            }}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '8px',
+            }}>
+              <h2 id="auth-title" style={{ margin: 0 }}>
+                {authMode === 'login' ? 'Welcome back' : 'Create your account'}
+              </h2>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAuth(false);
+                  setShowPassword(false);
+                }}
+                aria-label="Close authentication"
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'inherit',
+                  fontSize: '22px',
+                  cursor: 'pointer',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <p style={{
+              margin: '0 0 22px',
+              color: 'var(--text-secondary, #aaa)',
+              fontSize: '13px',
+              lineHeight: 1.6,
+            }}>
+              {authMode === 'login'
+                ? 'Sign in to access your saved analyses and code from anywhere.'
+                : 'Create an account to securely sync your History and Saved Code.'}
+            </p>
+
+            <form onSubmit={handleAuthSubmit}>
+              {authMode === 'register' && (
+                <label style={{
+                  display: 'block',
+                  marginBottom: '14px',
+                  fontSize: '13px',
+                }}>
+                  Full Name
+                  <input
+                    type="text"
+                    value={authName}
+                    onChange={(event) => setAuthName(event.target.value)}
+                    placeholder="Enter your name"
+                    autoComplete="name"
+                    required
+                    style={authInputStyle}
+                  />
+                </label>
+              )}
+
+              <label style={{
+                display: 'block',
+                marginBottom: '14px',
+                fontSize: '13px',
+              }}>
+                Email Address
+                <input
+                  type="email"
+                  value={authEmail}
+                  onChange={(event) => setAuthEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  required
+                  style={authInputStyle}
+                />
+              </label>
+
+              <label style={{
+                display: 'block',
+                marginBottom: '16px',
+                fontSize: '13px',
+              }}>
+                Password
+
+                <div style={{
+                  position: 'relative',
+                  marginTop: '7px',
+                }}>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={authPassword}
+                    onChange={(event) => setAuthPassword(event.target.value)}
+                    placeholder="Enter your password"
+                    autoComplete={
+                      authMode === 'login'
+                        ? 'current-password'
+                        : 'new-password'
+                    }
+                    minLength={authMode === 'register' ? 6 : undefined}
+                    required
+                    style={{
+                      ...authInputStyle,
+                      marginTop: 0,
+                      paddingRight: '46px',
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((previous) => !previous)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '5px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-secondary, #aaa)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {showPassword ? (
+                      <svg
+                        width="19"
+                        height="19"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M3 3l18 18" />
+                        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                        <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5 0 9 4.5 10 7-.4 1-1.2 2.2-2.4 3.3" />
+                        <path d="M6.2 6.2C3.9 7.7 2.4 10 2 12c1 2.5 5 7 10 7 1.2 0 2.3-.2 3.3-.7" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="19"
+                        height="19"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </label>
+
+              {authError && (
+                <p style={{
+                  color: '#ef7777',
+                  fontSize: '13px',
+                  margin: '0 0 14px',
+                }}>
+                  {authError}
+                </p>
+              )}
+
+              {authMessage && (
+                <p style={{
+                  color: '#70c99a',
+                  fontSize: '13px',
+                  margin: '0 0 14px',
+                }}>
+                  {authMessage}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="analyze-btn"
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  marginTop: '4px',
+                }}
+              >
+                {authLoading
+                  ? 'Please wait...'
+                  : authMode === 'login'
+                  ? 'Sign In'
+                  : 'Create Account'}
+              </button>
+            </form>
+
+            <p style={{
+              margin: '20px 0 0',
+              textAlign: 'center',
+              fontSize: '13px',
+              color: 'var(--text-secondary, #aaa)',
+            }}>
+              {authMode === 'login'
+                ? "Don't have an account? "
+                : 'Already have an account? '}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode(authMode === 'login' ? 'register' : 'login');
+                  setAuthError('');
+                  setAuthMessage('');
+                  setShowPassword(false);
+                }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--accent-color, #a99aff)',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  padding: 0,
+                }}
+              >
+                {authMode === 'login' ? 'Register' : 'Sign In'}
+              </button>
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowAuth(false);
+                setShowPassword(false);
+              }}
+              style={{
+                width: '100%',
+                marginTop: '16px',
+                padding: '10px',
+                border: '1px solid var(--border-color, #333)',
+                borderRadius: '7px',
+                background: 'transparent',
+                color: 'inherit',
+                cursor: 'pointer',
+                fontSize: '13px',
+              }}
+            >
+              Continue as Guest
+            </button>
+          </section>
+        </div>
+      )}
+
     </div>
   );
 }
+
+const authInputStyle = {
+  display: 'block',
+  width: '100%',
+  boxSizing: 'border-box',
+  marginTop: '7px',
+  padding: '11px 12px',
+  border: '1px solid var(--border-color, #444)',
+  borderRadius: '7px',
+  background: 'var(--input-bg, #0e1015)',
+  color: 'inherit',
+  outline: 'none',
+  fontSize: '13px',
+};
 
 export default App;

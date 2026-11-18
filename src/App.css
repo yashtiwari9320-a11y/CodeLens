@@ -1,4 +1,4 @@
-
+﻿
 /* =========================================
    GLOBAL
 ========================================= */
@@ -3021,4 +3021,29 @@ footer {
     flex-direction: column;
     gap: 9px;
   }
+}
+
+
+.saved-analysis {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border-color, #30333d);
+  border-radius: 10px;
+  background: var(--panel-bg, #15171e);
+}
+
+.saved-analysis > strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.saved-analysis-type {
+  margin-bottom: 12px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.saved-analysis .explanation-content {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
 }

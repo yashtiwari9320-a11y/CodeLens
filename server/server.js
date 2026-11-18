@@ -2,9 +2,13 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import mongoose from "mongoose";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { GoogleGenAI } from "@google/genai";
+
+import authRoutes from "./routes/auth.js";
+import userDataRoutes from "./routes/userData.js";
 
 // =========================================
 // CONFIGURATION
@@ -27,6 +31,51 @@ const TOTAL_GEMINI_DEADLINE_MS = 40000;
 
 app.use(cors());
 app.use(express.json());
+
+// =========================================
+// API ROUTES
+// =========================================
+
+app.use("/api/auth", authRoutes);
+app.use("/api/user-data", userDataRoutes);
+
+// =========================================
+// MONGODB CONNECTION
+// =========================================
+
+async function connectMongoDB() {
+    const mongoURI = process.env.MONGODB_URI;
+
+    if (!mongoURI) {
+        console.error("[MONGODB ERROR] MONGODB_URI is missing.");
+        return;
+    }
+
+    try {
+        await mongoose.connect(mongoURI, {
+            serverSelectionTimeoutMS: 10000
+        });
+
+        console.log("[MONGODB] Connected successfully.");
+        console.log(`[MONGODB] Database: ${mongoose.connection.name}`);
+
+    } catch (error) {
+        console.error("[MONGODB ERROR]", error.message);
+        console.log("[MONGODB] Express server will continue running.");
+    }
+}
+
+mongoose.connection.on("disconnected", () => {
+    console.log("[MONGODB] Database disconnected.");
+});
+
+mongoose.connection.on("reconnected", () => {
+    console.log("[MONGODB] Database reconnected.");
+});
+
+mongoose.connection.on("error", (error) => {
+    console.error("[MONGODB ERROR]", error.message);
+});
 
 // =========================================
 // GEMINI INITIALIZATION
@@ -285,6 +334,9 @@ ${code}
 // =========================================
 // START SERVER
 // =========================================
+
+// Start MongoDB connection independently
+connectMongoDB();
 
 const server = app.listen(PORT, "0.0.0.0", () => {
     console.log("--------------------------------");
