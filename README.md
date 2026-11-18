@@ -1,174 +1,224 @@
-# CodeLens
+# CodeLens | AI-Powered Code Explanation & Learning Platform
 
-### AI-Powered Code Explanation & Learning Platform
+CodeLens is an AI-powered code explanation and learning platform built with React, Node.js, Express, and Google Gemini AI. It helps developers understand code, identify potential bugs, and learn programming concepts through beginner-friendly AI explanations.
 
-CodeLens is an AI-powered web application designed to help developers understand, analyze and improve their code. Powered by Google's Gemini AI, it provides code explanations, debugging assistance and concept-based learning through an interactive workspace.
+The platform supports guest access as well as optional user accounts, allowing registered users to securely store and synchronize their code analysis history and saved snippets using MongoDB Atlas.
 
-<p align="center">
-  <a href="https://code-lens-gamma-coral.vercel.app/">Live Demo</a> •
-  <a href="https://github.com/yashtiwari9320-a11y/CodeLens">GitHub Repository</a> •
-  <a href="https://github.com/yashtiwari9320-a11y">Developer Profile</a>
-</p>
+## Live Demo
 
----
+**Website:** https://code-lens-gpt-b975.vercel.app/
+
+**GitHub Repository:** https://github.com/yashtiwari9320-a11y/CodeLens
+
+## Features
+
+### AI-Powered Code Analysis
+- Explain code in simple, beginner-friendly language.
+- Debug code and identify potential errors.
+- Understand programming concepts, functions, and syntax.
+- Receive structured AI-generated explanations.
+- Powered by Google Gemini AI.
+
+### User Authentication
+- User registration and login.
+- Password hashing using bcryptjs.
+- JWT-based authentication.
+- Secure access to account-specific data.
+- Password visibility toggle.
+
+### Guest and Account Modes
+- Use CodeLens without creating an account.
+- Guest data is stored locally in the browser.
+- Registered users can synchronize their data with MongoDB Atlas.
+
+### History Management
+- Automatically save code analysis history.
+- View previous explanations.
+- Delete individual history records or clear history.
+- Cloud synchronization for registered users.
+
+### Saved Code
+- Save code snippets with custom titles.
+- Preserve the associated AI analysis.
+- View and restore previously saved snippets.
+- Store saved snippets in MongoDB for registered users.
+
+### User Interface
+- Dark and light themes.
+- Responsive interface.
+- Dedicated Dashboard, Code Explainer, History, Saved Code, and Settings sections.
+
+## Technology Stack
+
+| Category | Technologies |
+|---|---|
+| Frontend | React.js, Vite, CSS |
+| Backend | Node.js, Express.js |
+| Database | MongoDB Atlas |
+| ODM | Mongoose |
+| AI Integration | Google Gemini API |
+| Authentication | JWT |
+| Password Security | bcryptjs |
+| Markdown Rendering | React Markdown, remark-gfm |
+| Deployment | Vercel, Render |
+| Version Control | Git, GitHub |
+
+## Project Architecture
+
+CodeLens uses a client-server architecture.
+
+1. The React frontend communicates with the Express backend through REST APIs.
+2. The backend processes code analysis requests using Google Gemini.
+3. MongoDB Atlas stores registered users, history, and saved code.
+4. JWT authenticates registered users and protects account-specific routes.
+5. Guest users continue using browser LocalStorage.
 
 ## Screenshots
 
 ### Dashboard
-
 ![CodeLens Dashboard](screenshots/dashboard.png)
 
 ### Code Explainer
-
 ![CodeLens Code Explainer](screenshots/code-explainer.png)
 
-### Analysis History
-
+### History
 ![CodeLens History](screenshots/history.png)
 
 ### Saved Code
-
 ![CodeLens Saved Code](screenshots/saved-code.png)
-
----
-
-## Features
-
-- **AI Code Explanation:** Understand code through clear, structured explanations.
-- **Debugging Assistance:** Identify potential errors and receive suggestions to fix them.
-- **Concept Learning:** Explore programming concepts related to submitted code.
-- **Multi-language Support:** Work with Python, C, C++ and JavaScript.
-- **Code Saving:** Save useful code snippets for future reference.
-- **Analysis History:** Access previous code analyses.
-- **Dashboard:** View analysis statistics, recent activity and saved snippets.
-- **Personalized Settings:** Configure the default programming language and interface theme.
-- **Responsive Interface:** Access the application across desktop and mobile devices.
-
-## Tech Stack
-
-| Technology | Purpose | Documentation |
-|---|---|---|
-| React | Frontend user interface | [React Docs](https://react.dev/) |
-| Vite | Development and build tool | [Vite Docs](https://vite.dev/) |
-| CSS | Styling and responsive layouts | [MDN CSS](https://developer.mozilla.org/en-US/docs/Web/CSS) |
-| Node.js | Backend runtime | [Node.js Docs](https://nodejs.org/docs/latest/api/) |
-| Express.js | Backend API | [Express Docs](https://expressjs.com/) |
-| Google Gemini AI | AI-powered code analysis | [Gemini API Docs](https://ai.google.dev/gemini-api/docs) |
-| LocalStorage | Client-side data persistence | [MDN Web Storage](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage) |
-| Vercel | Frontend deployment | [Vercel Docs](https://vercel.com/docs) |
-| Render | Backend hosting | [Render Docs](https://render.com/docs) |
-| Git & GitHub | Version control | [Git Docs](https://git-scm.com/doc) |
-
-## Application Architecture
-
-CodeLens follows a frontend-backend architecture.
-
-1. The user enters code and selects a programming language.
-2. The React frontend sends the request to the Express backend.
-3. The backend communicates with Google's Gemini AI.
-4. Gemini generates the requested analysis.
-5. The backend returns the response to the frontend.
-6. The application displays the result and stores relevant history locally.
 
 ## Getting Started
 
 ### Prerequisites
 
-- [Node.js and npm](https://nodejs.org/)
-- [Git](https://git-scm.com/)
-- [Google Gemini API Key](https://aistudio.google.com/apikey)
+- Node.js and npm
+- MongoDB Atlas account
+- Google Gemini API key
+- Git
 
 ### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/yashtiwari9320-a11y/CodeLens.git
-```
-
-### 2. Navigate to the Project
-
-```bash
 cd CodeLens
 ```
 
-### 3. Install Frontend Dependencies
+### 2. Install Frontend Dependencies
 
 ```bash
 npm install
 ```
 
-### 4. Configure the Backend
-
-Open a separate terminal and navigate to the server directory:
+### 3. Install Backend Dependencies
 
 ```bash
 cd server
 npm install
 ```
 
-Create a `.env` file inside the `server` directory and configure your Gemini API key using the environment variable name expected by your backend source code.
+### 4. Configure Environment Variables
 
-**Security Note:** Never upload API keys or private environment files to GitHub.
+Create a `.env` file inside the `server` directory.
 
-### 5. Run the Application
+Add the following variables:
 
-Start the backend from the `server` directory:
+```env
+GEMINI_API_KEY=your_gemini_api_key
+MONGODB_URI=your_mongodb_connection_string
+JWT_SECRET=your_generated_jwt_secret
+```
+
+Replace the example values with your own credentials.
+
+**Important:** Never upload `.env` files or secret credentials to GitHub.
+
+### 5. Start the Backend
+
+From the `server` directory:
 
 ```bash
 npm start
 ```
 
-Start the frontend in a separate terminal from the project root:
+The backend will run on port 5000 locally.
+
+### 6. Start the Frontend
+
+Open another terminal at the project root:
 
 ```bash
 npm run dev
 ```
 
-The frontend and backend run separately.
+Open the local URL displayed by Vite in your browser.
 
 ## Project Structure
 
 ```text
 CodeLens/
 │
-├── server/
-│   └── Backend files
+├── public/
+│
+├── screenshots/
 │
 ├── src/
 │   ├── App.jsx
 │   ├── App.css
-│   └── Other frontend files
+│   └── assets/
 │
-├── public/
-├── screenshots/
-│   ├── dashboard.png
-│   ├── code-explainer.png
-│   ├── history.png
-│   └── saved-code.png
+├── server/
+│   ├── middleware/
+│   │   └── authMiddleware.js
+│   │
+│   ├── models/
+│   │   ├── User.js
+│   │   ├── History.js
+│   │   └── SavedCode.js
+│   │
+│   ├── routes/
+│   │   ├── auth.js
+│   │   └── userData.js
+│   │
+│   ├── server.js
+│   ├── package.json
+│   └── .env
 │
+├── .gitignore
 ├── package.json
 └── README.md
 ```
 
-## Key Learning Outcomes
+## Deployment
+
+CodeLens is deployed using:
+
+- **Frontend:** Vercel
+- **Backend:** Render
+- **Database:** MongoDB Atlas
+- **AI Service:** Google Gemini API
+
+The production frontend communicates with the deployed Express backend, while MongoDB Atlas provides persistent cloud storage for registered users.
+
+## Learning Outcomes
 
 Developing CodeLens provided practical experience in:
 
-- Building responsive interfaces using React.
-- Managing application state with React Hooks.
-- Integrating third-party AI APIs.
-- Developing backend APIs using Express.js.
-- Connecting frontend and backend services.
-- Managing application data with LocalStorage.
-- Deploying applications using Vercel and Render.
-- Using Git and GitHub for version control.
+- Full-stack web development.
+- React component-based development.
+- REST API development using Express.js.
+- MongoDB database integration using Mongoose.
+- User authentication and authorization.
+- Password hashing and JWT implementation.
+- Third-party AI API integration.
+- Cloud deployment and environment configuration.
+- Git and GitHub version control.
 
 ## Future Enhancements
 
-- User authentication and personalized accounts.
-- Support for additional programming languages.
-- Code execution and output preview.
-- Exportable analysis reports.
-- Advanced code quality and optimization suggestions.
+- Additional programming language support.
+- Improved code analysis and debugging.
+- Enhanced user account management.
+- More advanced learning and code organization features.
 
 ## Author
 
@@ -176,10 +226,6 @@ Developing CodeLens provided practical experience in:
 
 BSc Information Technology Student
 
-- **GitHub:** [Developer Profile](https://github.com/yashtiwari9320-a11y)
-- **Project:** [CodeLens Repository](https://github.com/yashtiwari9320-a11y/CodeLens)
-- **Live Application:** [CodeLens](https://code-lens-gamma-coral.vercel.app/)
+GitHub: https://github.com/yashtiwari9320-a11y
 
----
-
-*CodeLens is an educational project developed to make programming concepts easier to understand through AI-powered assistance.*
+LinkedIn: https://www.linkedin.com/in/yash-tiwari/
